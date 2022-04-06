@@ -1,0 +1,308 @@
+- name: U_VMware_vSphere_6-7_Virtual_Machine_V1R2_STIG
+  hosts: localhost
+  vars_prompt:
+    - name: vcenter_password
+      prompt: "Enter your vCenter Password"
+      private: yes
+  vars:
+    vcenter_hostname: 10.10.10.20
+    vcenter_username: administrator@vsphere.local
+    datacenter_name: SFEDLAB
+    guest_name: []
+    vm_name: Test Server
+  tasks:
+
+    - name: Gather all registered virtual machines
+      community.vmware.vmware_vm_info:
+        hostname: '{{ vcenter_hostname }}'
+        username: '{{ vcenter_username }}'
+        password: '{{ vcenter_password }}'
+        validate_certs: no
+      delegate_to: localhost
+      register: vminfo
+
+    - debug:
+        msg: "this should be skipped work"
+      when: item.guest_name == vm_name and item.guest_fullname is match("Microsoft*")   #"  #Microsoft*")
+      with_items: "{{ vminfo.virtual_machines }}"
+
+    - set_fact:
+          guest_name: "{{ guest_name }} + ['{{ item.guest_name }}']"
+      with_items: "{{ vminfo.virtual_machines }}"
+    - name: VM advanced_settings
+      vmware_guest:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        #datacenter: "{{ datacenter_name }}"
+        validate_certs: no
+        name: "{{ vm_name }}"
+        advanced_settings:
+          - key: isolation.tools.copy.disable
+            value: true
+          - key: isolation.tools.dnd.disable
+            value: true
+          - key: isolation.tools.paste.disable
+            value: true
+          - key: isolation.tools.diskShrink.disable
+            value: true
+          - key: isolation.tools.diskWiper.disable
+            value: true
+          - key: isolation.tools.hgfsServerSet.disable
+            value: true
+          - key: RemoteDisplay.maxConnections
+            value: 1
+          - key: RemoteDisplay.vnc.enabled
+            value: false
+          - key: tools.setinfo.sizeLimit
+            value: 1048576
+          - key: isolation.device.connectable.disable
+            value: true
+          - key: tools.guestlib.enableHostInfo
+            value: false
+#          - key: tools.guest.desktop.autolock
+#            value: true
+          - key: mks.enable3d
+            value: false
+    - name: VM advanced_settings
+      vmware_guest:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: no
+        name: "{{ vm_name }}"
+        advanced_settings:
+          - key: tools.guest.desktop.autolock
+            value: true
+      when: item.guest_name == vm_name and item.guest_fullname is match("Microsoft*")
+      with_items: "{{ vminfo.virtual_machines }}"
+    - name: Gather detailed information about tags and category associated with the given VM
+      community.vmware.vmware_guest_info:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        datacenter: "{{ datacenter_name }}"
+        validate_certs: no
+        name: "{{ vm_name }}"
+      register: detailed_tag_info
+    - set_fact:
+        isolationdeviceconnectabledisable: "{{ detailed_tag_info.instance.advanced_settings['isolation.device.connectable.disable'] }}"
+        isolationtoolsdnddisable: "{{ detailed_tag_info.instance.advanced_settings['isolation.tools.dnd.disable'] }}"
+        isolationtoolscopydisable: "{{ detailed_tag_info.instance.advanced_settings['isolation.tools.copy.disable'] }}"
+        isolationtoolspastedisable: "{{ detailed_tag_info.instance.advanced_settings['isolation.tools.paste.disable'] }}"
+        isolationtoolsdiskShrinkdisable: "{{ detailed_tag_info.instance.advanced_settings['isolation.tools.diskShrink.disable'] }}"
+        isolationtoolsdiskWiperdisable: "{{ detailed_tag_info.instance.advanced_settings['isolation.tools.diskWiper.disable'] }}"
+        isolationtoolshgfsServerSetdisable: "{{ detailed_tag_info.instance.advanced_settings['isolation.tools.hgfsServerSet.disable'] }}"
+        RemoteDisplaymaxConnections: "{{ detailed_tag_info.instance.advanced_settings['RemoteDisplay.maxConnections'] }}"
+        RemoteDisplayvncenabled: "{{ detailed_tag_info.instance.advanced_settings['RemoteDisplay.vnc.enabled'] }}"
+        toolssetinfosizeLimit: "{{ detailed_tag_info.instance.advanced_settings['tools.setinfo.sizeLimit'] }}"
+        toolsguestlibenableHostInfo: "{{ detailed_tag_info.instance.advanced_settings['tools.guestlib.enableHostInfo'] }}"
+        toolsguestdesktopautolock: "{{ detailed_tag_info.instance.advanced_settings['tools.guest.desktop.autolock'] }}"
+        mksenable3d: "{{ detailed_tag_info.instance.advanced_settings['mks.enable3d'] }}"
+
+
+    - name: create STIG Output file
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "This is the findings report for VM {{ vm_name }} using STIG Checklist U_VMware_vSphere_6-7_Virtual_Machine_V1R2_STIG"
+        insertbefore: BOF
+
+    - name: SV-239332r679545_rule
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "- Rule ID SV-239332r679545_rule is NOT a finding. isolation.tools.copy.disable:  '{{ isolationtoolscopydisable }}'"
+      when: isolationtoolscopydisable == True
+    - name: SV-239332r679545_rule Finding
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "- Rule ID SV-239332r679545_rule IS a finding. isolation.tools.copy.disable:  '{{ isolationtoolscopydisable }}'"
+      when: isolationtoolscopydisable != True
+
+    - name: SV-239333r679548_rule
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "- Rule ID SV-239333r679548_rule is NOT a finding. isolation.tools.dnd.disable:  '{{ isolationtoolsdnddisable }}'"
+      when: isolationtoolsdnddisable == True
+    - name: SV-239333r679548_rule Finding
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "- Rule ID SV-239333r679548_rule IS a finding. isolation.tools.dnd.disable:  '{{ isolationtoolsdnddisable }}'"
+      when: isolationtoolsdnddisable != True
+
+    - name: SV-239334r679551_rule
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "- Rule ID SV-239334r679551_rule is NOT a finding. isolation.tools.paste.disable:  '{{ isolationtoolspastedisable }}'"
+      when: isolationtoolspastedisable == True
+    - name: SV-239334r679551_rule Finding
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "- Rule ID SV-239334r679551_rule IS a finding. isolation.tools.paste.disable:  '{{ isolationtoolspastedisable }}'"
+      when: isolationtoolspastedisable != True
+
+    - name: SV-239335r679554_rule
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "- Rule ID SV-239335r679554_rule is NOT a finding. isolation.tools.diskShrink.disable:  '{{ isolationtoolsdiskShrinkdisable }}'"
+      when: isolationtoolsdiskShrinkdisable == True
+    - name: SV-239335r679554_rule Finding
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "- Rule ID SV-239335r679554_rule IS a finding. isolation.tools.diskShrink.disable:  '{{ isolationtoolsdiskShrinkdisable }}'"
+      when: isolationtoolsdiskShrinkdisable != True
+
+    - name: SV-239336r816834_rule
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "- Rule ID SV-239336r816834_rule is NOT a finding. isolation.tools.diskWiper.disable:  '{{ isolationtoolsdiskWiperdisable }}'"
+      when: isolationtoolsdiskWiperdisable == True
+    - name: SV-239336r816834_rule Finding
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "- Rule ID SV-239336r816834_rule IS a finding. isolation.tools.diskWiper.disable:  '{{ isolationtoolsdiskWiperdisable }}'"
+      when: isolationtoolsdiskWiperdisable != True
+
+    - name: SV-239338r679563_rule
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "- Rule ID SV-239338r679563_rule is NOT a finding. isolation.tools.hgfsServerSet.disable:  '{{ isolationtoolshgfsServerSetdisable }}'"
+      when: isolationtoolshgfsServerSetdisable == True
+    - name: SV-239338r679563_rule Finding
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "- Rule ID SV-239338r679563_rule IS a finding. isolation.tools.hgfsServerSet.disable:  '{{ isolationtoolshgfsServerSetdisable }}'"
+      when: isolationtoolshgfsServerSetdisable != True
+
+    - name: SV-239344r679581_rule
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "- Rule ID SV-239344r679581_rule is NOT a finding. RemoteDisplay.maxConnections:  '{{ RemoteDisplaymaxConnections }}'"
+      when: RemoteDisplaymaxConnections == '1'
+    - name: SV-239344r679581_rule Finding
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "- Rule ID SV-239344r679581_rule IS a finding. RemoteDisplay.maxConnections:  '{{ RemoteDisplaymaxConnections }}'"
+      when: RemoteDisplaymaxConnections != '1'
+
+    - name: SV-239345r679584_rule
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "- Rule ID SV-239345r679584_rule is NOT a finding. RemoteDisplay.vnc.enabled:  '{{ RemoteDisplayvncenabled }}'"
+      when: RemoteDisplayvncenabled == False
+    - name: SV-239345r679584_rule Finding
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "- Rule ID SV-239345r679584_rule IS a finding. RemoteDisplay.vnc.enabled:  '{{ RemoteDisplayvncenabled }}'"
+      when: RemoteDisplayvncenabled != False
+
+    - name: SV-239346r679587_rule
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "- Rule ID SV-239346r679587_rule is NOT a finding. tools.setinfo.sizeLimit:  '{{ toolssetinfosizeLimit }}'"
+      when: toolssetinfosizeLimit == '1048576'
+    - name: SV-239346r679587_rule Finding
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "- Rule ID SV-239346r679587_rule IS a finding. tools.setinfo.sizeLimit:  '{{ toolssetinfosizeLimit }}'"
+      when: toolssetinfosizeLimit != '1048576'
+
+    - name: SV-239347r679590_rule
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "- Rule ID SV-239347r679590_rule is NOT a finding. isolation.device.connectable.disable:  '{{ isolationdeviceconnectabledisable }}'"
+      when: isolationdeviceconnectabledisable == True
+    - name: SV-239347r679590_rule Finding
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "- Rule ID SV-239347r679590_rule IS a finding. isolation.device.connectable.disable:  '{{ isolationdeviceconnectabledisable }}'"
+      when: isolationdeviceconnectabledisable != True
+
+    - name: SV-239348r679593_rule
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "- Rule ID SV-239348r679593_rule is NOT a finding. tools.guestlib.enableHostInfo:  '{{ toolsguestlibenableHostInfo }}'"
+      when: toolsguestlibenableHostInfo == False
+    - name: SV-239348r679593_rule Finding
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "- Rule ID SV-239348r679593_rule IS a finding. tools.guestlib.enableHostInfo:  '{{ toolsguestlibenableHostInfo }}'"
+      when: toolsguestlibenableHostInfo != False
+
+    - name: SV-239353r679608_rule
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "- Rule ID SV-239353r679608_rule is NOT a finding. tools.guest.desktop.autolock:  '{{ toolsguestdesktopautolock }}' and OS is '{{ item.guest_fullname }}'"
+      when: toolsguestdesktopautolock == True and item.guest_name == vm_name
+      #when: item.guest_name == vm_name and item.guest_fullname is notmatch("Microsoft*") or toolsguestdesktopautolock == True
+      with_items: "{{ vminfo.virtual_machines }}"
+    - name: SV-239353r679608_rule Finding
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "- Rule ID SV-239353r679608_rule IS a finding. tools.guest.desktop.autolock:  '{{ toolsguestdesktopautolock }}' and OS is '{{ item.guest_fullname }}'"
+      #when: toolsguestdesktopautolock != False
+      when: item.guest_name == vm_name and item.guest_fullname is match("Microsoft*") and toolsguestdesktopautolock != True
+      with_items: "{{ vminfo.virtual_machines }}"
+    - name: SV-239354r679611_rule
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "- Rule ID SV-239354r679611_rule is NOT a finding. mks.enable3d:  '{{ mksenable3d }}'"
+      when: mksenable3d == False
+    - name: SV-239354r679611_rule Finding
+      local_action:
+        module: lineinfile
+        path: files/{{ vm_name }}.STIG_output.txt
+        create: yes
+        line: "- Rule ID SV-239354r679611_rule IS a finding. mks.enable3d:  '{{ mksenable3d }}'"
+      when: mksenable3d != False
