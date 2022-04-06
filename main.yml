@@ -4,12 +4,14 @@
     - name: vcenter_password
       prompt: "Enter your vCenter Password"
       private: yes
+    - name: vm_name
+      prompt: "Enter the name of the VM to STIG"
   vars:
     vcenter_hostname: 10.10.10.20
     vcenter_username: administrator@vsphere.local
     datacenter_name: SFEDLAB
     guest_name: []
-    vm_name: Test Server
+    #vm_name: Test Server
   tasks:
 
     - name: Gather all registered virtual machines
@@ -34,7 +36,6 @@
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
         password: "{{ vcenter_password }}"
-        #datacenter: "{{ datacenter_name }}"
         validate_certs: no
         name: "{{ vm_name }}"
         advanced_settings:
